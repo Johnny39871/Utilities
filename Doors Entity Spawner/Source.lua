@@ -121,6 +121,16 @@ local function destroy(entityTable)
     entityTable.Debug.OnEntityDespawned(entityTable)
 end
 
+local function shouldDeflect()
+    if workspace:FindFirstChild("Doggo") then
+        return true
+    elseif Char:FindFirstChild("Crucifix") then
+        return true
+    end
+
+    return false
+end
+
 -- Functions
 
 Creator.createEntity = function(config)
@@ -193,7 +203,13 @@ Creator.runEntity = function(entity)
 
     for _, room in next, workspace.CurrentRooms:GetChildren() do
         if room:FindFirstChild("Nodes") then
-            for _, node in next, room.Nodes:GetChildren() do
+            local roomNodes = room.Nodes:GetChildren()
+
+            table.sort(roomNodes, function(a, b)
+                return a.Name < b.Name
+            end)
+
+            for _, node in next, roomNodes do
                 nodes[#nodes + 1] = node
             end
         end
@@ -205,7 +221,7 @@ Creator.runEntity = function(entity)
     entity.Model.Parent = workspace
 
     if entity.Config.FlickerLights[1] then
-        task.spawn(ModuleScripts.ModuleEvents.flickerLights, workspace.CurrentRooms[Plr:GetAttribute("CurrentRoom")], entity.Config.FlickerLights[2])
+        task.spawn(ModuleScripts.ModuleEvents.flickerLights, workspace.CurrentRooms[ReSt.GameData.LatestRoom.Value], entity.Config.FlickerLights[2])
     end
 
     entity.Debug.OnEntitySpawned(entity)
@@ -246,36 +262,56 @@ Creator.runEntity = function(entity)
                 -- Within kill range
 
                 if (Root.Position - entity.Model.PrimaryPart.Position).Magnitude <= entity.Config.KillRange then
-                    -- Crucifix (lol)
+                    -- Entity deflection
                     
-                    if Char:FindFirstChild("Crucifix") then
+                    local doggo = workspace:FindFirstChild("Doggo")
+                    local crucifix = Char:FindFirstChild("Crucifix")
+                    
+                    if doggo or crucifix then
                         Connections[entity.Model].Movement:Disconnect()
+                        Connections[entity.Model].Drag:Disconnect()
                         entity.Model:SetAttribute("StopMovement", true)
+			local effect = game:GetObjects("rbxassetid://11555754461")[1]
+	   effect.Parent = game.Workspace
+	   effect:PivotTo(entity.Model.RushNew.CFrame - Vector3.new(0,3,0))
+	   effect.Chain1.Attachment:FindFirstChildOfClass("Beam").Attachment1 = entity.Model.RushNew.Attachment
+	   effect.Chain2.Attachment:FindFirstChildOfClass("Beam").Attachment1 = entity.Model.RushNew.Attachment
+	   effect.Chain3.Attachment:FindFirstChildOfClass("Beam").Attachment1 = entity.Model.RushNew.Attachment
+	   effect.Chain4.Attachment:FindFirstChildOfClass("Beam").Attachment1 = entity.Model.RushNew.Attachment
+           wait(0.5)
+	   local ts = game:GetService("TweenService")
+           ts:Create(entity.Model.RushNew,TweenInfo.new(2, Enum.EasingStyle.Sine,Enum.EasingDirection.In),{CFrame = entity.Model.RushNew.CFrame + Vector3.new(0,20,0)}):Play()
+           wait(2)
+	   effect:Destroy()
+	   entity.Model:Destroy()
+                        if doggo then
+                            doggo.Growl:Play()
+                            
+                            -- Repent
 
-                        -- Repent
+                            local nodeIdx, nearest = nil, math.huge
 
-                        local nodeIdx, nearest = nil, math.huge
+                            for i, v in next, nodes do
+                                local dist = (v.Position - entityPos).Magnitude
 
-                        for i, v in next, nodes do
-                            local dist = (v.Position - entityPos).Magnitude
-
-                            if dist < nearest then
-                                nodeIdx, nearest = i, dist
+                                if dist < nearest then
+                                    nodeIdx, nearest = i, dist
+                                end
                             end
+
+                            for i = nodeIdx, 1, -1 do
+                                drag(entity.Model, nodes[i].Position + Vector3.new(0, 3.5 + entity.Config.HeightOffset, 0), entity.Config.Speed)
+                            end
+
+                            destroy(entity)
+
+                            return
                         end
-
-                        for i = nodeIdx, 1, -1 do
-                            drag(entity.Model, nodes[i].Position + Vector3.new(0, 3.5 + entity.Config.HeightOffset, 0), entity.Config.Speed)
-                        end
-
-                        destroy(entity)
-
-                        return
                     end
 
                     -- Killing
         
-                    if entity.Config.CanKill and not Char.GetAttribute(Char, "Hiding") then
+                    if entity.Config.CanKill and not Char.GetAttribute(Char, "Hiding") and not shouldDeflect() then
                         Connections[entity.Model].Movement:Disconnect()
         
                         -- Jumpscare
